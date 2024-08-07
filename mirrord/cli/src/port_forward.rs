@@ -22,6 +22,7 @@ use tokio::{
     select,
 };
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt, StreamMap};
+use tokio_util::io::ReaderStream;
 
 use crate::{connection::AgentConnection, CliError, PortMapping};
 
@@ -34,7 +35,7 @@ pub struct PortForwarder {
     listeners: StreamMap<SocketAddr, TcpListenerStream>,
     // the reading half of the stream received by a listener for receiving data to send to the
     // agent
-    rx_connections: StreamMap<SocketAddr, OwnedReadHalf>,
+    rx_connections: StreamMap<SocketAddr, ReaderStream<OwnedReadHalf>>,
     // the writing half of the stream received by a listener for sending data back to the user app
     tx_connections: HashMap<SocketAddr, OwnedWriteHalf>,
     // bijective map for storing connection_ids and sockets
@@ -192,7 +193,7 @@ impl PortForwarder {
                     Some((socket, Ok(stream))) => {
                         // split the stream and add to rx/ tx
                         let (read, write) = stream.into_split();
-                        self.rx_connections.insert(socket, read);
+                        self.rx_connections.insert(socket, ReaderStream::with_capacity(read, 64000));
                         self.tx_connections.insert(socket, write);
                         // get destination socket from mappings
                         let destination =  match self.mappings.get(&socket) {
@@ -217,9 +218,20 @@ impl PortForwarder {
                     None => break Ok(()), // all streams ended
                 },
 
-                // message = self.rx_connections.next() => match message {
-                    // TODO: ReadHalf does not allow .next()
-                // }
+                message = self.rx_connections.next() => match message { // TODO: incoming data from local socket
+                    Some((socket, Ok(bytes))) => {
+                        let Some(Either::Left(connection_id)) = self.sockets_ids_map.get(Either::Right(socket)) else {
+                            // connection not ready
+                            break Ok(());
+                        };
+
+                        todo!()
+                    },
+                    Some((socket, Err(error))) => {
+                        todo!()
+                    },
+                    None => todo!(),
+                }
             }
         }
     }
