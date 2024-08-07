@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::Bytes,
     net::SocketAddr,
     time::{Duration, Instant},
@@ -20,6 +20,10 @@ use tokio::{
         TcpListener,
     },
     select,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        oneshot,
+    },
 };
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt, StreamMap};
 use tokio_util::io::ReaderStream;
@@ -33,16 +37,24 @@ pub struct PortForwarder {
     mappings: HashMap<SocketAddr, SocketAddr>,
     // accepts connections from the user app in the form of a stream
     listeners: StreamMap<SocketAddr, TcpListenerStream>,
-    // the reading half of the stream received by a listener for receiving data to send to the
-    // agent
-    rx_connections: StreamMap<SocketAddr, ReaderStream<OwnedReadHalf>>,
-    // the writing half of the stream received by a listener for sending data back to the user app
-    tx_connections: HashMap<SocketAddr, OwnedWriteHalf>,
-    // bijective map for storing connection_ids and sockets
-    sockets_ids_map: BiMap,
+    // oneshot channels for sending connection IDs to tasks
+    oneshots: VecDeque<oneshot::Sender<ConnectionId>>,
+    // identifies tasks by their corresponding connection ID
+    tasks: HashMap<ConnectionId, Sender<Vec<u8>>>,
+
+    // transmit internal messages from tasks to main loop
+    internal_msg_tx: Sender<PortForwardMessage>,
+    internal_msg_rx: Receiver<PortForwardMessage>,
+
     // true if Ping has been sent to agent
     waiting_for_pong: bool,
     ping_pong_timeout: Instant,
+}
+
+enum PortForwardMessage {
+    Connect(SocketAddr, oneshot::Sender<ConnectionId>),
+    Send(ConnectionId, Vec<u8>),
+    Close(ConnectionId),
 }
 
 impl PortForwarder {
@@ -69,16 +81,16 @@ impl PortForwarder {
             }
         }
 
+        let (internal_msg_tx, internal_msg_rx) = mpsc::channel(16);
+
         Ok(Self {
             agent_connection,
             mappings,
             listeners,
-            rx_connections: StreamMap::new(),
-            tx_connections: HashMap::new(),
-            sockets_ids_map: BiMap {
-                connection_ids: HashMap::new(),
-                sockets: HashMap::new(),
-            },
+            oneshots: VecDeque::new(),
+            tasks: HashMap::new(),
+            internal_msg_tx,
+            internal_msg_rx,
             waiting_for_pong: false,
             ping_pong_timeout: Instant::now(),
         })
@@ -139,25 +151,11 @@ impl PortForwarder {
                             DaemonMessage::TcpOutgoing(message) => {
                                 match message {
                                     DaemonTcpOutgoing::Connect(res) => {
-                                        match res {
-                                            Ok(connection) => {
-                                                let SocketAddress::Ip(local_address) = connection.local_address else {
-                                                    return Err(PortForwardError::ConnectionError
-                                                        ("Unexpectedly received Unix address for socket during setup".into())
-                                                    );
-                                                };
-                                                self.sockets_ids_map.insert(connection.connection_id, local_address);
-                                            },
-                                            Err(error) => return Err(PortForwardError::ConnectionError(format!("{error}"))),
-                                        }
-                                    },
-                                    DaemonTcpOutgoing::Read(res) => todo!(), // TODO: :)
+                                        // TODO: transmit connection id
+                                        },
+                                    DaemonTcpOutgoing::Read(res) => todo!(), // TODO: send data to corresponding task
                                     DaemonTcpOutgoing::Close(connection_id) => {
-                                        if let Some(Either::Right(socket)) = self.sockets_ids_map.get(Either::Left(connection_id)) {
-                                            self.sockets_ids_map.remove(Either::Right(socket));
-                                            self.rx_connections.remove(&socket);
-                                            self.tx_connections.remove(&socket);
-                                        }
+                                        // TODO: remove from tasks hashmap, kill task
                                     },
                                 }
                             },
@@ -191,46 +189,14 @@ impl PortForwarder {
                 // stream coming from the user app
                 message = self.listeners.next() => match message {
                     Some((socket, Ok(stream))) => {
-                        // split the stream and add to rx/ tx
-                        let (read, write) = stream.into_split();
-                        self.rx_connections.insert(socket, ReaderStream::with_capacity(read, 64000));
-                        self.tx_connections.insert(socket, write);
-                        // get destination socket from mappings
-                        let destination =  match self.mappings.get(&socket) {
-                            Some(address) => address,
-                            None => return Err(PortForwardError::SocketMappingNotFound(socket)),
-                        };
-                        let dest_socket = SocketAddress::Ip(*destination);
-                        let Ok(_) = self.agent_connection.sender.send(ClientMessage::TcpOutgoing(LayerTcpOutgoing::Connect(LayerConnect{remote_address: dest_socket}))).await else {
-                            return Err(PortForwardError::AgentSetupError("Failed to send connection request to agent".into()));
-                        };
+                        // TODO: spawn task for this socket + stream
                     },
                     Some((socket, Err(error))) => {
                         // error from TcpStream
                         tracing::error!("Error occured while listening to local socket {socket}: {error}");
-                        self.rx_connections.remove(&socket);
-                        self.tx_connections.remove(&socket);
-                        if let Some(Either::Left(connection_id)) = self.sockets_ids_map.get(Either::Right(socket)) {
-                            let _ = self.agent_connection.sender.send(ClientMessage::TcpOutgoing(LayerTcpOutgoing::Close(LayerClose{ connection_id }))).await;
-                        }
-                        self.sockets_ids_map.remove(Either::Right(socket));
+                        // TODO: remove from listeners
                     },
-                    None => break Ok(()), // all streams ended
-                },
-
-                message = self.rx_connections.next() => match message { // TODO: incoming data from local socket
-                    Some((socket, Ok(bytes))) => {
-                        let Some(Either::Left(connection_id)) = self.sockets_ids_map.get(Either::Right(socket)) else {
-                            // connection not ready
-                            break Ok(());
-                        };
-
-                        todo!()
-                    },
-                    Some((socket, Err(error))) => {
-                        todo!()
-                    },
-                    None => todo!(),
+                    None => break Ok(()),
                 }
             }
         }
