@@ -9,7 +9,7 @@ mod rpath;
 mod main {
     use std::{
         env,
-        ffi::OsStr,
+        ffi::{OsStr, OsString},
         io::{self, ErrorKind::AlreadyExists, Read},
         os::{macos::fs::MetadataExt, unix::fs::PermissionsExt},
         path::{Path, PathBuf},
@@ -53,18 +53,18 @@ mod main {
 
     /// Get the `PathBuf` of the `mirrord-bin` dir, and return a `String` prefix to remove, without
     /// a trailing `/`, so that the stripped path starts with a `/`
-    fn get_temp_bin_str_prefix(path: &Path) -> String {
-        // lossy: we assume our temp dir path does not contain non-unicode chars.
-        path.to_string_lossy()
-            .to_string()
-            .trim_end_matches('/')
-            .to_string()
-    }
+    // fn get_temp_bin_str_prefix(path: &Path) -> String {
+    //     // lossy: we assume our temp dir path does not contain non-unicode chars.
+    //     path.to_string_lossy()
+    //         .to_string()
+    //         .trim_end_matches('/')
+    //         .to_string()
+    // }
 
     /// The string path of mirrord's internal temp binary dir, where we put SIP-patched binaries and
     /// scripts, without a trailing `/`.
-    pub static MIRRORD_TEMP_BIN_DIR_STRING: Lazy<String> =
-        Lazy::new(|| get_temp_bin_str_prefix(&MIRRORD_TEMP_BIN_DIR_PATH_BUF));
+    // pub static MIRRORD_TEMP_BIN_DIR_STRING: Lazy<String> =
+    //     Lazy::new(|| get_temp_bin_str_prefix(&MIRRORD_TEMP_BIN_DIR_PATH_BUF));
 
     /// Check if a cpu subtype (already parsed with the correct endianness) is arm64e, given its
     /// main cpu type is arm64. We only consider the lowest byte in the check.
@@ -242,18 +242,14 @@ mod main {
         original_path: &Path,
         output_path: &Path,
     ) -> Result<()> {
-        let parent_path_str = original_path
-            .parent()
-            .unwrap_or(original_path)
-            .to_string_lossy()
-            .to_string();
+        let parent_path_str = original_path.parent().unwrap_or(original_path);
         let new_entries = original_entries
             .iter()
             .filter_map(|path| {
                 path.strip_prefix("@executable_path")
                     .or_else(|| path.strip_prefix("@loader_path"))
             })
-            .map(|stripped_path| parent_path_str.clone() + stripped_path)
+            .map(|stripped_path| parent_path_str.clone().join(Path::new(stripped_path)))
             .collect();
         rpath::add_rpaths(output_path, new_entries)
     }
@@ -459,7 +455,7 @@ mod main {
         // If which fails, try using the given path as is.
         let complete_path = which(path).unwrap_or_else(|_| PathBuf::from(&path));
         if !complete_path.exists() {
-            return Err(FileNotFound(complete_path.to_string_lossy().to_string()));
+            return Err(FileNotFound(complete_path));
         }
         Ok(complete_path)
     }
@@ -523,7 +519,7 @@ mod main {
         }
     }
 
-    /// When patching a bundled mac application, it try to load libraries from its frameworks
+    /// When patching a bundled mac application, it tries to load libraries from its frameworks
     /// directory. The patch might cause it to search under the `mirrord-bin` temp dir.
     ///
     /// To make sure it can find the libraries, we set (or add to) the
@@ -540,12 +536,16 @@ mod main {
             {
                 let frameworks_dir = ancestor
                     .join("Contents/Frameworks")
-                    .to_string_lossy()
-                    .to_string();
+                    .as_os_str()
+                    .to_os_string();
                 let new_value = if let Ok(existing_value) = env::var(FRAMEWORKS_ENV_VAR_NAME) {
-                    format!("{existing_value}:{frameworks_dir}")
+                    let mut combined = OsString::new();
+                    combined.push(existing_value);
+                    combined.push(":");
+                    combined.push(frameworks_dir);
+                    combined
                 } else {
-                    frameworks_dir
+                    OsString::from(frameworks_dir)
                 };
                 env::set_var(FRAMEWORKS_ENV_VAR_NAME, new_value);
                 break;

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SipError>;
@@ -30,8 +32,8 @@ pub enum SipError {
     #[error("Unlikely error happened `{0}`")]
     UnlikelyError(String),
 
-    #[error("Can't perform SIP check - executable file not found at `{0}`")]
-    FileNotFound(String),
+    #[error("Can't perform SIP check - executable file not found at `{0:?}`")]
+    FileNotFound(PathBuf),
 
     #[error("Got invalid string.")]
     NonUtf8Str(#[from] std::str::Utf8Error),
