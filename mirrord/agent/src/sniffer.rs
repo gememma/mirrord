@@ -307,15 +307,48 @@ where
     /// we have traffic from some existing connection from before mirrord started, then it tries to
     /// see if `bytes` contains an HTTP request of some sort. When an HTTP request is
     /// detected, then the agent should start mirroring as if it was a new connection.
+    /// If the HTTP request is not detected at the start of the packet, check if it starts further
+    /// in- this case applies to, for example, mirroring with service meshes and is tracked by
+    /// [GitHub issue 1942](https://github.com/metalbear-co/mirrord/issues/1942)
     ///
     /// tl;dr: checks packet flags, or if it's an HTTP packet, then begins a new sniffing session.
     #[tracing::instrument(level = Level::TRACE, ret, skip(bytes), fields(bytes = bytes.len()), ret)]
     fn treat_as_new_session(tcp_flags: u8, bytes: &[u8]) -> bool {
+        // if something that looks like an HTTP request is detected within the packet, check it
+        // using [`HttpVersion`]
+        fn found_request_in_bytes(bytes: &[u8]) -> bool {
+            // ignore non-valid utf8, requests begin at the start of an 8-byte chunk
+            // TODO: add logs
+            let valid = bytes
+                .chunks(8)
+                .filter_map(|chunk| std::str::from_utf8(chunk).ok())
+                .collect::<String>();
+            let request_start: usize = if valid.contains("HTTP/") {
+                // find request start by checking for an HTTP method
+                let methods = vec![
+                    "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH",
+                ];
+                let indices = methods
+                    .iter()
+                    .filter_map(|method| valid.find(method))
+                    .collect::<Vec<_>>();
+                *indices.first().unwrap_or(&0)
+            } else {
+                return false; // todo: check this isnt a short circuit?
+            };
+
+            // check the request version for validity
+            matches!(
+                HttpVersion::new(&bytes[request_start..]),
+                Some(HttpVersion::V1 | HttpVersion::V2)
+            )
+        }
         is_new_connection(tcp_flags)
             || matches!(
                 HttpVersion::new(bytes),
                 Some(HttpVersion::V1 | HttpVersion::V2)
             )
+            || found_request_in_bytes(bytes)
     }
 
     /// Handles TCP packet sniffed by [`Self::tcp_capture`].
