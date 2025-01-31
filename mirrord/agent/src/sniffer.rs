@@ -314,41 +314,41 @@ where
     /// tl;dr: checks packet flags, or if it's an HTTP packet, then begins a new sniffing session.
     #[tracing::instrument(level = Level::TRACE, ret, skip(bytes), fields(bytes = bytes.len()), ret)]
     fn treat_as_new_session(tcp_flags: u8, bytes: &[u8]) -> bool {
-        // if something that looks like an HTTP request is detected within the packet, check it
-        // using [`HttpVersion`]
-        fn found_request_in_bytes(bytes: &[u8]) -> bool {
-            // ignore non-valid utf8, requests begin at the start of an 8-byte chunk
-            // TODO: add logs
-            let valid = bytes
-                .chunks(8)
-                .filter_map(|chunk| std::str::from_utf8(chunk).ok())
-                .collect::<String>();
-            let request_start: usize = if valid.contains("HTTP/") {
-                // find request start by checking for an HTTP method
-                let methods = vec![
-                    "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH",
-                ];
-                let indices = methods
-                    .iter()
-                    .filter_map(|method| valid.find(method))
-                    .collect::<Vec<_>>();
-                *indices.first().unwrap_or(&0)
-            } else {
-                return false; // todo: check this isnt a short circuit?
-            };
+        // HEADER frames are sent to open a stream, as defined in IETF RFC 9113
+        // https://datatracker.ietf.org/doc/html/rfc9113#section-6.2
+        // if a frame follows the correct pattern of an HTTP/2 frame with a HEADERS payload, we can
+        // assume there is a new HTTP/2 connection to be picked up. This approach is required when a
+        // connections is kept open (for example, when using gRPC and a service mesh) and mirrord
+        // needs to pick up a connection without seeing the initial handshake
+        fn attempt_http2_frame_detection(bytes: &[u8]) -> bool {
+            if bytes.is_empty() {
+                return false;
+            }
+            tracing::warn!("attempt_http2_frame_detection: {:?}", bytes);
+            let http_fingerprint = !bytes
+                .windows(6)
+                .filter(|&window| window == &[109, 101, 116, 104, 111, 100])
+                .collect::<Vec<_>>()
+                .is_empty();
 
-            // check the request version for validity
-            matches!(
-                HttpVersion::new(&bytes[request_start..]),
-                Some(HttpVersion::V1 | HttpVersion::V2)
-            )
+            if http_fingerprint {
+                tracing::warn!("valid contains 'method' fingerprint");
+                // check the request version for validity
+                tracing::warn!("version from bytes: {:?}", HttpVersion::new(&bytes));
+                // TODO: attempt to parse frame of http2?
+                return false;
+            } else {
+                tracing::warn!("HTTP/ not found");
+                return false;
+            };
         }
+        tracing::warn!("treat_as_new_session start");
         is_new_connection(tcp_flags)
             || matches!(
                 HttpVersion::new(bytes),
                 Some(HttpVersion::V1 | HttpVersion::V2)
             )
-            || found_request_in_bytes(bytes)
+            || attempt_http2_frame_detection(bytes)
     }
 
     /// Handles TCP packet sniffed by [`Self::tcp_capture`].
