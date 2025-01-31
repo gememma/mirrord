@@ -317,32 +317,31 @@ where
         // if something that looks like an HTTP request is detected within the packet, check it
         // using [`HttpVersion`]
         fn found_request_in_bytes(bytes: &[u8]) -> bool {
+            if bytes.is_empty() {
+                return false;
+            }
             // ignore non-valid utf8, requests begin at the start of an 8-byte chunk
-            // TODO: add logs
-            let valid = bytes
-                .chunks(8)
-                .filter_map(|chunk| std::str::from_utf8(chunk).ok())
-                .collect::<String>();
-            let request_start: usize = if valid.contains("HTTP/") {
-                // find request start by checking for an HTTP method
-                let methods = vec![
-                    "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH",
-                ];
-                let indices = methods
-                    .iter()
-                    .filter_map(|method| valid.find(method))
-                    .collect::<Vec<_>>();
-                *indices.first().unwrap_or(&0)
-            } else {
-                return false; // todo: check this isnt a short circuit?
-            };
+            tracing::warn!("found_request_in_bytes: {:?}", bytes);
+            // treat the bytes that correspond to "method" as an indicator that packet contains an
+            // HTTP request
+            let http_fingerprint = !bytes
+                .windows(6)
+                .filter(|&window| window == &[109, 101, 116, 104, 111, 100])
+                .collect::<Vec<_>>()
+                .is_empty();
 
-            // check the request version for validity
-            matches!(
-                HttpVersion::new(&bytes[request_start..]),
-                Some(HttpVersion::V1 | HttpVersion::V2)
-            )
+            if http_fingerprint {
+                tracing::warn!("valid contains 'method' fingerprint");
+                // check the request version for validity
+                tracing::warn!("version from bytes: {:?}", HttpVersion::new(&bytes));
+                // TODO: attempt to parse frame of http2?
+                return false;
+            } else {
+                tracing::warn!("HTTP/ not found");
+                return false;
+            };
         }
+        tracing::warn!("treat_as_new_session start");
         is_new_connection(tcp_flags)
             || matches!(
                 HttpVersion::new(bytes),
