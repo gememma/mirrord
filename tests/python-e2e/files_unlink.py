@@ -1,4 +1,4 @@
-""" Unlink and unlinkat hooks tests """
+"""Unlink and unlinkat hooks tests"""
 
 import os
 import unittest
@@ -27,7 +27,7 @@ class FileOpsTest(unittest.TestCase):
         file.close()
         self.assertFalse(os.path.isfile(temp_file))
 
-        # def test_unlinkat_remote_readwrite(self):
+    def test_unlinkat_remote_readwrite(self):
         """
         Creates a file remotely and removes the link to it using unlinkat
         """
