@@ -798,6 +798,7 @@ async fn run_child_agent() -> AgentResult<()> {
 
     let mut child_agent = Command::new(command)
         .args(args)
+        .arg("--second-process")
         .kill_on_drop(true)
         .spawn()?;
 
@@ -809,8 +810,8 @@ async fn run_child_agent() -> AgentResult<()> {
     }
 }
 
-/// Sets iptable chains' names in env (e.g. [`IPTABLE_PREROUTING_ENV`]) and spawns the main agent
-/// routine in the child process. When the child process exits, cleans the iptables.
+/// Spawns the main agent routine in the child process and handles cleanup of iptables
+/// when the child process exits.
 ///
 /// Captures SIGTERM signals sent by Kubernetes when the pod is gracefully deleted.
 /// When a signal is captured, the child process is killed and the iptables are cleaned.
@@ -819,14 +820,6 @@ async fn start_iptable_guard(args: Args) -> AgentResult<()> {
 
     let state = State::new(&args).await?;
     let pid = state.container_pid();
-
-    std::env::set_var(IPTABLE_PREROUTING_ENV, IPTABLE_PREROUTING.as_str());
-    std::env::set_var(IPTABLE_MESH_ENV, IPTABLE_MESH.as_str());
-    std::env::set_var(IPTABLE_STANDARD_ENV, IPTABLE_STANDARD.as_str());
-    std::env::set_var(
-        IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL_ENV,
-        IPTABLE_IPV4_ROUTE_LOCALNET_ORIGINAL.as_str(),
-    );
 
     let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
 
@@ -896,11 +889,7 @@ pub async fn main() -> AgentResult<()> {
 
     let args = cli::parse_args();
 
-    let agent_result = if args.mode.is_targetless()
-        || (std::env::var(IPTABLE_PREROUTING_ENV).is_ok()
-            && std::env::var(IPTABLE_MESH_ENV).is_ok()
-            && std::env::var(IPTABLE_STANDARD_ENV).is_ok())
-    {
+    let agent_result = if args.mode.is_targetless() || args.second_process {
         start_agent(args).await
     } else {
         start_iptable_guard(args).await
