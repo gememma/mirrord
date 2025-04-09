@@ -1,12 +1,3 @@
-use client_connection::AgentTlsConnector;
-use dns::{ClientGetAddrInfoRequest, DnsCommand};
-use futures::TryFutureExt;
-use metrics::{start_metrics, CLIENT_COUNT};
-use mirrord_agent_env::envs;
-use mirrord_agent_iptables::{
-    error::IPTablesError, new_ip6tables, new_iptables, IPTablesWrapper, SafeIpTables,
-};
-use mirrord_protocol::{ClientMessage, DaemonMessage, GetEnvVarsRequest, LogMessage};
 use std::{
     collections::HashMap,
     mem,
@@ -18,6 +9,16 @@ use std::{
         Arc,
     },
 };
+
+use client_connection::AgentTlsConnector;
+use dns::{ClientGetAddrInfoRequest, DnsCommand};
+use futures::TryFutureExt;
+use metrics::{start_metrics, CLIENT_COUNT};
+use mirrord_agent_env::envs;
+use mirrord_agent_iptables::{
+    error::IPTablesError, new_ip6tables, new_iptables, IPTablesWrapper, SafeIpTables,
+};
+use mirrord_protocol::{ClientMessage, DaemonMessage, GetEnvVarsRequest, LogMessage};
 use steal::StealerMessage;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -112,7 +113,7 @@ impl State {
                             .unwrap_or_default(),
                     },
                 ))
-                    .await?;
+                .await?;
 
                 env.extend(container_handle.raw_env().clone());
 
@@ -337,10 +338,7 @@ impl ClientConnectionHandler {
     ///
     /// Breaks upon receiver/sender drop.
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn start(
-        mut self,
-        cancellation_token: CancellationToken,
-    ) -> AgentResult<()> {
+    async fn start(mut self, cancellation_token: CancellationToken) -> AgentResult<()> {
         let error = loop {
             select! {
                 message = self.connection.receive() => {
@@ -527,15 +525,16 @@ impl ClientConnectionHandler {
     }
 }
 
-pub async fn dirty_tables_send_close(
-    mut connection: ClientConnection
-) -> AgentResult<()> {
+pub async fn dirty_tables_send_close(mut connection: ClientConnection) -> AgentResult<()> {
     // Immediately sends [`DaemonMessage::Close`] to the client due to the presence of dirty
     // IP tables
-    connection.send(DaemonMessage::Close(
-        "Dirty IP table detected in target. Either another mirrord agent is already \
+    connection
+        .send(DaemonMessage::Close(
+            "Dirty IP table detected in target. Either another mirrord agent is already \
             running, or a previous agent failed to properly clean up after itself."
-            .to_string())).await?;
+                .to_string(),
+        ))
+        .await?;
     Ok(())
 }
 
@@ -652,7 +651,8 @@ async fn start_agent(args: Args) -> AgentResult<()> {
             match any {
                 Ok(Ok((stream, _addr))) => {
                     // Exit after response to the first connection with DaemonMessage::Close
-                    let connection = ClientConnection::new(stream, 0, state.tls_connector.clone()).await?;
+                    let connection =
+                        ClientConnection::new(stream, 0, state.tls_connector.clone()).await?;
                     error!("start_agent -> IPTables dirty, send Close message");
                     let _ = dirty_tables_send_close(connection).await;
                 }
@@ -673,7 +673,7 @@ async fn start_agent(args: Args) -> AgentResult<()> {
             clients.spawn(state.clone().serve_client_connection(
                 stream,
                 bg_tasks.clone(),
-                cancellation_token.clone()
+                cancellation_token.clone(),
             ));
         }
 

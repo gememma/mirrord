@@ -7,8 +7,9 @@
 #![warn(clippy::indexing_slicing)]
 #![deny(unused_crate_dependencies)]
 
-use crate::error::AgentError;
 use std::process::ExitCode;
+
+use crate::error::AgentError;
 
 mod cli;
 mod client_connection;
@@ -34,7 +35,7 @@ mod vpn;
 async fn main() -> ExitCode {
     match crate::entrypoint::main().await {
         Ok(_) => ExitCode::SUCCESS,
-        Err(AgentError::IPTablesDirty) => { ExitCode::from(99) },
+        Err(AgentError::IPTablesDirty) => ExitCode::from(99),
         _ => ExitCode::FAILURE,
     }
 }
