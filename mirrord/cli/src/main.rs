@@ -310,6 +310,9 @@ mod verify_config;
 mod vpn;
 mod wsl;
 
+#[cfg(feature = "wizard")]
+mod wizard;
+
 pub(crate) use error::{CliError, CliResult};
 use verify_config::verify_config;
 
@@ -895,6 +898,8 @@ fn main() -> miette::Result<()> {
             Commands::PortForward(args) => port_forward(&args, watch, &user_data).await?,
             Commands::Vpn(args) => vpn::vpn_command(*args).await?,
             Commands::Newsletter => newsletter::newsletter_command().await,
+            #[cfg(feature = "wizard")]
+            Commands::Wizard => { wizard::wizard_command().await }
         };
 
         Ok(())

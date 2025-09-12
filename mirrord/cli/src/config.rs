@@ -153,6 +153,10 @@ pub(super) enum Commands {
 
     /// Subscribe to the mirrord newsletter
     Newsletter,
+    
+    /// sdjkhskjdhfksj
+    #[cfg(feature = "wizard")]
+    Wizard,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
