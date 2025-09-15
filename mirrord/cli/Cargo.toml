@@ -19,7 +19,8 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-wizard = []
+wizard = ["dep:axum", "dep:tower-http", "dep:tar"]
+windows_build = []
 
 [dependencies]
 mirrord-console = { path = "../console", features = ["async-logger"] }
@@ -71,6 +72,10 @@ uuid.workspace = true
 fs4.workspace = true
 hex.workspace = true
 tower = { workspace = true, features = ["retry"] }
+axum = { version = "0.8.4", optional = true }
+tower-http = { version = "0.6.6", features = ["fs"], optional = true }
+tar = { version = "0.4.44", optional = true }
+flate2 = "1.1.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 nix = { workspace = true, features = ["process", "resource"] }
@@ -101,6 +106,3 @@ hyper-util = { workspace = true, "features" = ["server"] }
 http-body-util.workspace = true
 kube.workspace = true
 rcgen.workspace = true
-
-[features]
-windows_build = []
