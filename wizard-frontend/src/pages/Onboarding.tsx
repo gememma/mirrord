@@ -65,15 +65,7 @@ const Onboarding = () => {
   const [showWizard, setShowWizard] = useState(false);
   const navigate = useNavigate();
   const handleConfigSave = (config: Partial<Config>) => {
-    const existingConfigs = JSON.parse(localStorage.getItem('mirrord-configs') || '[]');
-    const newConfig = {
-      ...config,
-      id: Date.now().toString(),
-      service: config.target?.split(' ')[0] || 'my-service',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    localStorage.setItem('mirrord-configs', JSON.stringify([...existingConfigs, newConfig]));
-    localStorage.setItem('mirrord-onboarding-completed', 'true');
+    // TODO: ??
     navigate('/dashboard');
   };
   const handleSkipToConfig = () => {
