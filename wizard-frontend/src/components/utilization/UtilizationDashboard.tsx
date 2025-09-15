@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Calendar, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,7 @@ export const UtilizationDashboard = () => {
   });
   const { toast } = useToast();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const report = await fetchUtilizationReport(filters);
@@ -41,7 +41,7 @@ export const UtilizationDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, toast]);
 
   const handleExport = async () => {
     try {
@@ -68,7 +68,7 @@ export const UtilizationDashboard = () => {
 
   useEffect(() => {
     loadData();
-  }, [filters]);
+  }, [loadData]);
 
   if (loading) {
     return (

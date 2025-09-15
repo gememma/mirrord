@@ -39,7 +39,12 @@ export const UsageCharts = ({ data }: UsageChartsProps) => {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  type BarTooltipPayload = Array<{
+    value: number;
+    payload: { name: string; sessionTime: number; sessions: number };
+  }>;
+
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: BarTooltipPayload; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -57,7 +62,11 @@ export const UsageCharts = ({ data }: UsageChartsProps) => {
     return null;
   };
 
-  const PieTooltip = ({ active, payload }: any) => {
+  type PieTooltipPayload = Array<{
+    name: string;
+    value: number;
+  }>;
+  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: PieTooltipPayload }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-lg">

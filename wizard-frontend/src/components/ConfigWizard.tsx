@@ -16,59 +16,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-interface ConfigData {
-  name: string;
-  target: string;
-  targetPath?: string;
-  targetType: string;
-  namespace: string;
-  service?: string;
-  fileSystem: {
-    enabled: boolean;
-    mode: "read" | "write" | "local";
-    rules: Array<{
-      mode: "read" | "write" | "local";
-      filter: string;
-    }>;
-  };
-  network: {
-    incoming: {
-      enabled: boolean;
-      mode: "steal" | "mirror";
-      httpFilter: Array<{
-        type: "header" | "method" | "content" | "path";
-        value: string;
-        matchType?: "exact" | "regex";
-      }>;
-      filterOperator: "AND" | "OR";
-      ports: Array<{
-        remote: string;
-        local: string;
-      }>;
-    };
-    outgoing: {
-      enabled: boolean;
-      protocol: "tcp" | "udp" | "both";
-      filter: string;
-      filterTarget: "remote" | "local";
-    };
-    dns: {
-      enabled: boolean;
-      filter: string;
-    };
-  };
-  environment: {
-    enabled: boolean;
-    include: string;
-    exclude: string;
-    override: string;
-  };
-  agent: {
-    scaledown: boolean;
-    copyTarget: boolean;
-  };
-  isActive: boolean;
-}
+import type { FeatureConfig, ConfigData as SharedConfigData } from "@/types/config";
+type ConfigData = SharedConfigData;
 interface ConfigWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -272,8 +221,17 @@ export function ConfigWizard({
     }
     setOnboardingStep("config");
   };
+  // Using shared FeatureConfig
+
   const generateConfigJson = () => {
-    const configObj: any = {
+    const configObj: {
+      target?: string;
+      agent: {
+        copy_target?: boolean;
+        scaledown?: boolean;
+      };
+      feature: FeatureConfig;
+    } = {
       target: config.target ? `${config.target}` : undefined,
       agent: {},
       feature: {}

@@ -5,60 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger } from "@/components/ui/sidebar";
 import { ConfigWizard } from "./ConfigWizard";
+import type { ConfigData } from "@/types/config";
 import mirroredArchitecture from "@/assets/mirrord-architecture.svg";
-interface Config {
+type Config = ConfigData & {
   id: string;
-  name: string;
-  target: string;
-  targetType: string;
-  service: string;
-  namespace: string;
-  isActive: boolean;
   createdAt: string;
-  fileSystem: {
-    enabled: boolean;
-    mode: "read" | "write" | "local";
-    rules: Array<{
-      mode: "read" | "write" | "local";
-      filter: string;
-    }>;
-  };
-  network: {
-    incoming: {
-      enabled: boolean;
-      mode: "steal" | "mirror";
-      httpFilter: Array<{
-        type: "header" | "method" | "content" | "path";
-        value: string;
-      }>;
-      filterOperator: "AND" | "OR";
-      ports: Array<{
-        remote: string;
-        local: string;
-      }>;
-    };
-    outgoing: {
-      enabled: boolean;
-      protocol: "tcp" | "udp" | "both";
-      filter: string;
-      filterTarget: "remote" | "local";
-    };
-    dns: {
-      enabled: boolean;
-      filter: string;
-    };
-  };
-  environment: {
-    enabled: boolean;
-    include: string;
-    exclude: string;
-    override: string;
-  };
-  agent: {
-    scaledown: boolean;
-    copyTarget: boolean;
-  };
-}
+  service: string;
+};
 interface Service {
   name: string;
   configs: Config[];
@@ -159,7 +112,9 @@ export function Dashboard() {
                   <h1 className="text-4xl font-bold mb-4 text-foreground">
                     Getting Started
                   </h1>
-                  <p className="text-muted-foreground text-lg max-w-2xl">Run local code like it's in your Kubernetes cluster without deploying it first. Get started by creating your first mirrord.json configuration.</p>
+                  <p className="text-muted-foreground text-lg max-w-2xl">Run local code like it's in your Kubernetes
+                    cluster without deploying it first. Get started by creating your first mirrord.json
+                    configuration.</p>
                 </div>
 
             {services.every(service => service.configs.length === 0) ?
