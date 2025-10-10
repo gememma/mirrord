@@ -1,5 +1,5 @@
 import { useState, useEffect, ReactNode } from "react";
-import { WizardStep } from "@/components/Wizard";
+import { WizardStep, Wizard } from "@/components/Wizard";
 import {
   Card,
   CardContent,
@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/card";
 import { ArrowRight, BookOpen, Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConfigWizard } from "./ConfigWizard";
 import { ConfigData } from "@/types/config";
 
 interface PanelProps {
@@ -33,6 +32,8 @@ const Panel = ({
 
   const handleWizardOpen = (steps: WizardStep[]) => {
     // TODO: take steps param and open correct wizard
+    // TODO: set steps directly?
+    // TODO: forget what step the wizard was on when closed
     setShowWizard(true);
   };
 
@@ -64,13 +65,15 @@ const Panel = ({
   return (
     <div>
       <div className="grid gap-6 sm:gap-8 max-w-4xl mx-auto">
-        <ConfigWizard
+        <Wizard
+          steps={steps}
           isOpen={showWizard}
           onClose={() => setShowWizard(false)}
-          onSave={function (config: ConfigData): void {
-            throw new Error("Function not implemented.");
+          onComplete={(data) => {
+            console.log("Wizard completed with data:", data);
+            setShowWizard(false);
           }}
-          isReturning={isReturning}
+          className="w-full"
         />
         <Card className="bg-gradient-card border-border/50 hover:shadow-glow transition-all duration-300">
           <CardHeader>
