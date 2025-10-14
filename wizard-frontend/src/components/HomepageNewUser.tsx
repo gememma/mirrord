@@ -10,6 +10,7 @@ import mirrordLogo from "@/assets/mirrord-logo.png";
 import Panel from "./Panel";
 import BoilerplateStep from "./steps/BoilerplateStep";
 import IntroStep from "./steps/IntroStep";
+import ConfigStep from "./steps/ConfigStep";
 
 const HomepageNewUser = () => {
   const titleCreateConfig = (
@@ -27,19 +28,7 @@ const HomepageNewUser = () => {
 
   const introStep = IntroStep();
 
-  const configStep: WizardStep = {
-    id: "config-new-user",
-    title: "Configuration Setup",
-    content: (
-      <div className="space-y-6">
-        <div className="text-center space-y-4 pt-4">
-          <p className="text-sm text-muted-foreground">
-            Configure your mirrord settings using the tabs below
-          </p>
-        </div>
-      </div>
-    )
-  };
+  const configStep = ConfigStep();
 
   // Learning steps
 
@@ -239,8 +228,8 @@ const HomepageNewUser = () => {
           </p>
         </div>
         <div className="grid gap-6 sm:gap-8  md:grid-cols-2 max-w-4xl mx-auto">
-          <Panel title={titleLearn} content={"Understand how mirrord works and explore the overview before creating your first configuration"} buttonText={"Show Me How It Works"} buttonColor={"purple"} steps={[]} />
-          <Panel title={titleCreateConfig} content={"Jump directly to creating your mirrord.json configuration file"} buttonText={"Create Configuration Now"} buttonColor={"gray"} steps={[introStep, learningStep1, learningStep2, learningStep3, learningStep4, learningStep5, learningStep6, boilerplateStep, configStep]} />
+          <Panel title={titleLearn} content={"Understand how mirrord works and explore the overview before creating your first configuration"} buttonText={"Show Me How It Works"} buttonColor={"purple"} steps={[introStep, learningStep1, learningStep2, learningStep3, learningStep4, learningStep5, learningStep6, boilerplateStep, configStep]} />
+          <Panel title={titleCreateConfig} content={"Jump directly to creating your mirrord.json configuration file"} buttonText={"Create Configuration Now"} buttonColor={"gray"} steps={[boilerplateStep, configStep]} />
         </div>
       </div>
     </div>

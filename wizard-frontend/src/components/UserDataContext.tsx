@@ -13,7 +13,10 @@ export const ConfigDataContextProvider = ({ children }: { children: React.ReactN
     const [config, setConfig] = useState<any>({
         "feature": {
             "network": {
-                "incoming": "mirror",
+                "incoming": {
+                    "mode": "mirror",
+                    "httpFilter": {},
+                },
                 "outgoing": true
             },
             "fs": "read",

@@ -35,16 +35,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import DownloadButton from "../DownloadButton";
-import {
-  generateConfigJson,
-  validateJson,
-} from "../JsonUtils";
+import { validateJson } from "../JsonUtils";
 import { ConfigDataContext } from "../UserDataContext";
 
 const ConfigTabs = () => {
@@ -52,13 +49,13 @@ const ConfigTabs = () => {
   const [currentTab, setCurrentTab] = useState<string>("target");
 
   // TODO: write a util function to determine selectedBoilerplate from config
-  const selectedBoilerplate: "steal" | "mirror" | "replace" = "steal"
+  const selectedBoilerplate: "steal" | "mirror" | "replace" = "steal";
 
   // TODO: remove all this editable json stuff, replace with using config directly
-  // For copying to clipboard 
+  // For copying to clipboard
   const { toast } = useToast();
   const copyToClipboard = async () => {
-    const jsonToCopy = editableJson || generateConfigJson(config);
+    const jsonToCopy = editableJson || config.config;
     await navigator.clipboard.writeText(jsonToCopy);
     toast({
       title: "Copied to clipboard",
@@ -67,14 +64,89 @@ const ConfigTabs = () => {
   };
   const [editableJson, setEditableJson] = useState<string>("");
   const [jsonError, setJsonError] = useState<string>("");
+
+  // todo: use the actual change config from config.whatever
+  const setConfig = (newConfig: any) => {
+    config.setConfig(newConfig)
+    return;
+  };
+
+  // todo: pull targets from backend
+  const mockTargets = [
+    {
+      name: "api-service",
+      namespace: "default",
+      kind: "deployment",
+    },
+    {
+      name: "frontend-app",
+      namespace: "default",
+      kind: "deployment",
+    },
+    {
+      name: "database",
+      namespace: "production",
+      kind: "statefulset",
+    },
+    {
+      name: "worker-queue",
+      namespace: "default",
+      kind: "deployment",
+    },
+    {
+      name: "backup-job",
+      namespace: "system",
+      kind: "cronjob",
+    },
+  ];
+
+  const mockNamespaces = [
+    "default",
+    "production",
+    "system",
+    "kube-system",
+    "monitoring",
+  ];
+
   return (
     <>
+      {/* Tabs navigation above configuration options */}
       <Tabs
         value={currentTab}
         onValueChange={(value) => {
-          // TODO: Only allow navigation if required fields are filled
-        //   if (value === "network" && !config.target) return;
-        //   if (value === "export" && !config.target) return;
+          // Only allow navigation if required fields are filled
+          if (value === "network" && !config.config.target) return;
+          if (value === "export" && !config.config.target) return;
+          setCurrentTab(value);
+        }}
+        className="w-full"
+      >
+        <TabsList className="grid w-full grid-cols-3 h-10">
+          <TabsTrigger value="target" className="text-sm">
+            Target
+          </TabsTrigger>
+          <TabsTrigger
+            value="network"
+            className="text-sm"
+            disabled={!config.config.target}
+          >
+            Network
+          </TabsTrigger>
+          <TabsTrigger
+            value="export"
+            className="text-sm"
+            disabled={!config.config.target}
+          >
+            Export
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {/* Main configuration options */}
+      <Tabs
+        value={currentTab}
+        onValueChange={(value) => {
+          if (value === "network" && !config.config.target) return;
+          if (value === "export" && !config.config.target) return;
           setCurrentTab(value);
         }}
         className="w-full"
@@ -91,11 +163,14 @@ const ConfigTabs = () => {
               <div>
                 <Label htmlFor="namespace">Namespace</Label>
                 <Select
-                  value={config.namespace}
+                  value={config.config.namespace}
                   onValueChange={(value) =>
                     setConfig({
-                      ...config,
-                      namespace: value,
+                      ...config.config,
+                      target: {
+                        ...config.config.target,
+                        namespace: value,
+                      },
                     })
                   }
                 >
@@ -115,7 +190,7 @@ const ConfigTabs = () => {
               <div>
                 <Label htmlFor="target-type">Target Type</Label>
                 <Select
-                  value={config.targetType}
+                  value={config.config.targetType}
                   onValueChange={(value) =>
                     setConfig({
                       ...config,
@@ -145,8 +220,9 @@ const ConfigTabs = () => {
                       variant="outline"
                       className="w-full justify-between"
                     >
-                      {config.target
-                        ? config.target.split("/")[2] || config.target
+                      {(config.config.target?? false) && config.config.target.path
+                        ? config.config.target.path.split("/")[2] ||
+                          config.config.target.path
                         : "Search for target..."}
                       <ChevronDown className="h-4 w-4 opacity-50" />
                     </Button>
@@ -161,8 +237,8 @@ const ConfigTabs = () => {
                         {mockTargets
                           .filter(
                             (target) =>
-                              target.kind === config.targetType &&
-                              target.namespace === config.namespace
+                              target.kind === config.config.targetType &&
+                              target.namespace === config.config.namespace
                           )
                           .map((target) => (
                             <div
@@ -196,7 +272,7 @@ const ConfigTabs = () => {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {!config.target && (
+                {!config.config.target && (
                   <p className="text-sm text-destructive flex items-center gap-1 mt-1">
                     <AlertCircle className="h-4 w-4" />
                     Please select a target to continue
@@ -209,7 +285,7 @@ const ConfigTabs = () => {
                 <Input
                   id="config-name"
                   placeholder="e.g., prod-api-config"
-                  value={config.name}
+                  value={config.config.name}
                   onChange={(e) =>
                     setConfig({
                       ...config,
@@ -235,265 +311,164 @@ const ConfigTabs = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {selectedBoilerplate === "steal" && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      mirrord supports stealing a subset of the remote target's
+                      traffic. You can do this by specifying a filter on either
+                      an HTTP header or path.
+                    </p>
+                  </div>
+
+                  {/* HTTP Filters */}
                   <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        mirrord supports stealing a subset of the remote
-                        target's traffic. You can do this by specifying a filter
-                        on either an HTTP header or path.
-                      </p>
-                    </div>
-
-                    {/* HTTP Filters */}
-                    <div className="space-y-4">
-                      <div className="space-y-3">
-                        {/* Header Filtering */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Label className="font-medium">
-                              Header Filters
-                            </Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setConfig({
-                                  ...config,
-                                  network: {
-                                    ...config.network,
-                                    incoming: {
-                                      ...config.network.incoming,
-                                      httpFilter: [
-                                        ...config.network.incoming.httpFilter,
-                                        {
-                                          type: "header",
-                                          value: "",
-                                          matchType: "exact",
-                                        },
-                                      ],
-                                    },
+                    <div className="space-y-3">
+                      {/* Header Filtering */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-medium">Header Filters</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setConfig({
+                                ...config,
+                                network: {
+                                  ...config.config.feature.network,
+                                  incoming: {
+                                    ...config.config.feature.network.incoming,
+                                    httpFilter: [
+                                      ...config.config.feature.network.incoming
+                                        .httpFilter,
+                                      {
+                                        type: "header",
+                                        value: "",
+                                        matchType: "exact",
+                                      },
+                                    ],
                                   },
-                                })
-                              }
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </Button>
-                          </div>
-
-                          {config.network.incoming.httpFilter.filter(
-                            (f) => f.type === "header"
-                          ).length > 0 && (
-                            <div className="space-y-3">
-                              {config.network.incoming.httpFilter
-                                .filter((f) => f.type === "header")
-                                .map((filter, index) => (
-                                  <div key={index} className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <Input
-                                        placeholder="e.g., x-mirrord-test: true"
-                                        value={filter.value}
-                                        onChange={(e) => {
-                                          const newFilters = [
-                                            ...config.network.incoming
-                                              .httpFilter,
-                                          ];
-                                          const headerIndex =
-                                            newFilters.findIndex(
-                                              (f, i) =>
-                                                f.type === "header" &&
-                                                i === index
-                                            );
-                                          if (headerIndex !== -1) {
-                                            newFilters[headerIndex] = {
-                                              ...newFilters[headerIndex],
-                                              value: e.target.value,
-                                            };
-                                            setConfig({
-                                              ...config,
-                                              network: {
-                                                ...config.network,
-                                                incoming: {
-                                                  ...config.network.incoming,
-                                                  httpFilter: newFilters,
-                                                },
-                                              },
-                                            });
-                                          }
-                                        }}
-                                        className="flex-1"
-                                      />
-                                      <Select
-                                        value={filter.matchType || "exact"}
-                                        onValueChange={(
-                                          value: "exact" | "regex"
-                                        ) => {
-                                          const newFilters = [
-                                            ...config.network.incoming
-                                              .httpFilter,
-                                          ];
-                                          const headerIndex =
-                                            newFilters.findIndex(
-                                              (f, i) =>
-                                                f.type === "header" &&
-                                                i === index
-                                            );
-                                          if (headerIndex !== -1) {
-                                            newFilters[headerIndex] = {
-                                              ...newFilters[headerIndex],
-                                              matchType: value,
-                                            };
-                                            setConfig({
-                                              ...config,
-                                              network: {
-                                                ...config.network,
-                                                incoming: {
-                                                  ...config.network.incoming,
-                                                  httpFilter: newFilters,
-                                                },
-                                              },
-                                            });
-                                          }
-                                        }}
-                                      >
-                                        <SelectTrigger className="w-20">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="exact">
-                                            Exact
-                                          </SelectItem>
-                                          <SelectItem value="regex">
-                                            Regex
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          const newFilters =
-                                            config.network.incoming.httpFilter.filter(
-                                              (f, i) =>
-                                                !(
-                                                  f.type === "header" &&
-                                                  i === index
-                                                )
-                                            );
-                                          setConfig({
-                                            ...config,
-                                            network: {
-                                              ...config.network,
-                                              incoming: {
-                                                ...config.network.incoming,
-                                                httpFilter: newFilters,
-                                              },
-                                            },
-                                          });
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
+                                },
+                              })
+                            }
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add
+                          </Button>
                         </div>
-
-                        {/* Path Filtering */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Label className="font-medium">Path Filters</Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setConfig({
-                                  ...config,
-                                  network: {
-                                    ...config.network,
-                                    incoming: {
-                                      ...config.network.incoming,
-                                      httpFilter: [
-                                        ...config.network.incoming.httpFilter,
-                                        {
-                                          type: "path",
-                                          value: "",
-                                        },
-                                      ],
-                                    },
-                                  },
-                                })
-                              }
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </Button>
-                          </div>
-
-                          {config.network.incoming.httpFilter.filter(
-                            (f) => f.type === "path"
-                          ).length > 0 && (
-                            <div className="space-y-2">
-                              {config.network.incoming.httpFilter
-                                .filter((f) => f.type === "path")
-                                .map((filter, index) => (
-                                  <div
-                                    key={index}
-                                    className="flex items-center gap-2"
-                                  >
+                        (
+                        {(
+                          config.config.feature.network.incoming.httpFilter ??
+                          []
+                        ).filter((f) => f.type === "header").length > 0 && (
+                          <div className="space-y-3">
+                            {(
+                              config.config.feature.network.incoming
+                                .httpFilter ?? []
+                            )
+                              .filter((f) => f.type === "header")
+                              .map((filter, index) => (
+                                <div key={index} className="space-y-2">
+                                  <div className="flex items-center gap-2">
                                     <Input
-                                      placeholder="e.g., /api/v1/test"
+                                      placeholder="e.g., x-mirrord-test: true"
                                       value={filter.value}
                                       onChange={(e) => {
                                         const newFilters = [
-                                          ...config.network.incoming.httpFilter,
+                                          ...config.config.feature.network
+                                            .incoming.httpFilter,
                                         ];
-                                        const pathIndex = newFilters.findIndex(
-                                          (f, i) =>
-                                            f.type === "path" && i === index
-                                        );
-                                        if (pathIndex !== -1) {
-                                          newFilters[pathIndex] = {
-                                            ...newFilters[pathIndex],
+                                        const headerIndex =
+                                          newFilters.findIndex(
+                                            (f, i) =>
+                                              f.type === "header" && i === index
+                                          );
+                                        if (headerIndex !== -1) {
+                                          newFilters[headerIndex] = {
+                                            ...newFilters[headerIndex],
                                             value: e.target.value,
                                           };
                                           setConfig({
                                             ...config,
                                             network: {
-                                              ...config.network,
+                                              ...config.config.feature.network,
                                               incoming: {
-                                                ...config.network.incoming,
+                                                ...config.config.feature.network
+                                                  .incoming,
                                                 httpFilter: newFilters,
                                               },
                                             },
                                           });
                                         }
                                       }}
+                                      className="flex-1"
                                     />
+                                    <Select
+                                      value={filter.matchType || "exact"}
+                                      onValueChange={(
+                                        value: "exact" | "regex"
+                                      ) => {
+                                        const newFilters = [
+                                          ...config.config.feature.network
+                                            .incoming.httpFilter,
+                                        ];
+                                        const headerIndex =
+                                          newFilters.findIndex(
+                                            (f, i) =>
+                                              f.type === "header" && i === index
+                                          );
+                                        if (headerIndex !== -1) {
+                                          newFilters[headerIndex] = {
+                                            ...newFilters[headerIndex],
+                                            matchType: value,
+                                          };
+                                          setConfig({
+                                            ...config,
+                                            network: {
+                                              ...config.config.feature.network,
+                                              incoming: {
+                                                ...config.config.feature.network
+                                                  .incoming,
+                                                httpFilter: newFilters,
+                                              },
+                                            },
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-20">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="exact">
+                                          Exact
+                                        </SelectItem>
+                                        <SelectItem value="regex">
+                                          Regex
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => {
-                                        const newFilters =
-                                          config.network.incoming.httpFilter.filter(
-                                            (f, i) =>
-                                              !(
-                                                f.type === "path" && i === index
-                                              )
-                                          );
+                                        const newFilters = (
+                                          config.config.feature.network.incoming
+                                            .httpFilter ?? []
+                                        ).filter(
+                                          (f, i) =>
+                                            !(
+                                              f.type === "header" && i === index
+                                            )
+                                        );
                                         setConfig({
                                           ...config,
                                           network: {
-                                            ...config.network,
+                                            ...config.config.feature.network,
                                             incoming: {
-                                              ...config.network.incoming,
+                                              ...config.config.feature.network
+                                                .incoming,
                                               httpFilter: newFilters,
                                             },
                                           },
@@ -503,292 +478,188 @@ const ConfigTabs = () => {
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </div>
-                                ))}
-                            </div>
-                          )}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                        )
+                      </div>
+
+                      {/* Path Filtering */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-medium">Path Filters</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setConfig({
+                                ...config,
+                                network: {
+                                  ...config.config.feature.network,
+                                  incoming: {
+                                    ...config.config.feature.network.incoming,
+                                    httpFilter: [
+                                      ...config.config.feature.network.incoming
+                                        .httpFilter,
+                                      {
+                                        type: "path",
+                                        value: "",
+                                      },
+                                    ],
+                                  },
+                                },
+                              })
+                            }
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add
+                          </Button>
                         </div>
 
-                        {/* Filter Logic Selection - Only show when there are multiple filters */}
-                        {config.network.incoming.httpFilter.length > 1 && (
-                          <>
-                            <Separator />
-                            <div className="space-y-2">
-                              <Label className="font-medium">
-                                Filter Logic
-                              </Label>
-                              <RadioGroup
-                                value={config.network.incoming.filterOperator}
-                                onValueChange={(value: "AND" | "OR") =>
-                                  setConfig({
-                                    ...config,
-                                    network: {
-                                      ...config.network,
-                                      incoming: {
-                                        ...config.network.incoming,
-                                        filterOperator: value,
-                                      },
-                                    },
-                                  })
-                                }
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="AND" id="and" />
-                                  <Label htmlFor="and" className="text-sm">
-                                    <strong>All</strong> - Match all specified
-                                    filters
-                                  </Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="OR" id="or" />
-                                  <Label htmlFor="or" className="text-sm">
-                                    <strong>Any</strong> - Match any specified
-                                    filter
-                                  </Label>
-                                </div>
-                              </RadioGroup>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Simplified Port Configuration */}
-                    <div className="space-y-4 mt-6">
-                      <div>
-                        <h3 className="text-base font-semibold mb-1">
-                          Port Configuration
-                        </h3>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Click a port to enable HTTP filtering. Deselect any
-                          ports that are not HTTP or gRPC. The following ports
-                          were detected in your target, with some already
-                          preselected by default.
-                        </p>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Detected Ports */}
-                        <div>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              "8080",
-                              "3000",
-                              "5432",
-                              "9000",
-                              "4000",
-                              "6379",
-                              "5672",
-                              "3306",
-                            ].map((port) => {
-                              const isSelected =
-                                config.network.incoming.ports.some(
-                                  (p) => p.remote === port
-                                );
-                              const togglePort = () => {
-                                if (isSelected) {
-                                  // Remove port
-                                  const newPorts =
-                                    config.network.incoming.ports.filter(
-                                      (p) => p.remote !== port
-                                    );
-                                  setConfig({
-                                    ...config,
-                                    network: {
-                                      ...config.network,
-                                      incoming: {
-                                        ...config.network.incoming,
-                                        ports: newPorts,
-                                      },
-                                    },
-                                  });
-                                } else {
-                                  // Add port
-                                  setConfig({
-                                    ...config,
-                                    network: {
-                                      ...config.network,
-                                      incoming: {
-                                        ...config.network.incoming,
-                                        ports: [
-                                          ...config.network.incoming.ports,
-                                          {
-                                            remote: port,
-                                            local: port,
-                                          },
-                                        ],
-                                      },
-                                    },
-                                  });
-                                }
-                              };
-                              return (
-                                <Button
-                                  key={port}
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  className={`rounded-full px-4 py-2 font-mono transition-all ${
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                                      : "hover:bg-primary/10"
-                                  }`}
-                                  onClick={togglePort}
+                        {(
+                          config.config.feature.network.incoming.httpFilter ??
+                          []
+                        ).filter((f) => f.type === "path").length > 0 && (
+                          <div className="space-y-2">
+                            {(
+                              config.config.feature.network.incoming
+                                .httpFilter ?? []
+                            )
+                              .filter((f) => f.type === "path")
+                              .map((filter, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center gap-2"
                                 >
-                                  {port}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Port Mappings */}
-                        {config.network.incoming.ports.length > 0 && (
-                          <div className="space-y-3">
-                            <h4 className="text-base font-semibold">
-                              Selected Ports
-                            </h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              Only map ports that run on different ports
-                              locally.
-                            </p>
-                            <div className="space-y-3">
-                              {config.network.incoming.ports.map(
-                                (portConfig, index) => (
-                                  <div
-                                    key={portConfig.remote}
-                                    className="border rounded-lg p-4 space-y-3"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Badge
-                                          variant="outline"
-                                          className="font-mono"
-                                        >
-                                          {portConfig.remote}
-                                        </Badge>
-                                        <span className="text-sm text-muted-foreground">
-                                          Remote Port
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center space-x-2">
-                                      <Checkbox
-                                        id={`local-port-${portConfig.remote}`}
-                                        checked={
-                                          portConfig.local !== portConfig.remote
-                                        }
-                                        onCheckedChange={(checked) => {
-                                          const newPorts = [
-                                            ...config.network.incoming.ports,
-                                          ];
-                                          newPorts[index] = {
-                                            ...newPorts[index],
-                                            local: checked
-                                              ? ""
-                                              : portConfig.remote,
-                                          };
-                                          setConfig({
-                                            ...config,
-                                            network: {
-                                              ...config.network,
-                                              incoming: {
-                                                ...config.network.incoming,
-                                                ports: newPorts,
-                                              },
+                                  <Input
+                                    placeholder="e.g., /api/v1/test"
+                                    value={filter.value}
+                                    onChange={(e) => {
+                                      const newFilters = [
+                                        ...config.config.feature.network
+                                          .incoming.httpFilter,
+                                      ];
+                                      const pathIndex = newFilters.findIndex(
+                                        (f, i) =>
+                                          f.type === "path" && i === index
+                                      );
+                                      if (pathIndex !== -1) {
+                                        newFilters[pathIndex] = {
+                                          ...newFilters[pathIndex],
+                                          value: e.target.value,
+                                        };
+                                        setConfig({
+                                          ...config,
+                                          network: {
+                                            ...config.config.feature.network,
+                                            incoming: {
+                                              ...config.config.feature.network
+                                                .incoming,
+                                              httpFilter: newFilters,
                                             },
-                                          });
-                                        }}
-                                      />
-                                      <Label
-                                        htmlFor={`local-port-${portConfig.remote}`}
-                                        className="text-sm"
-                                      >
-                                        Local port is different than remote
-                                      </Label>
-                                    </div>
-
-                                    {portConfig.local !== portConfig.remote && (
-                                      <div className="flex items-center gap-3">
-                                        <div className="flex-1">
-                                          <Label className="text-xs text-muted-foreground">
-                                            Local Port
-                                          </Label>
-                                          <Input
-                                            className="font-mono"
-                                            placeholder={portConfig.remote}
-                                            value={portConfig.local}
-                                            onChange={(e) => {
-                                              const newPorts = [
-                                                ...config.network.incoming
-                                                  .ports,
-                                              ];
-                                              newPorts[index] = {
-                                                ...newPorts[index],
-                                                local:
-                                                  e.target.value ||
-                                                  portConfig.remote,
-                                              };
-                                              setConfig({
-                                                ...config,
-                                                network: {
-                                                  ...config.network,
-                                                  incoming: {
-                                                    ...config.network.incoming,
-                                                    ports: newPorts,
-                                                  },
-                                                },
-                                              });
-                                            }}
-                                          />
-                                        </div>
-
-                                        <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-4" />
-
-                                        <div className="flex-1">
-                                          <Label className="text-xs text-muted-foreground">
-                                            Remote Port
-                                          </Label>
-                                          <Input
-                                            className="font-mono"
-                                            value={portConfig.remote}
-                                            readOnly
-                                          />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              )}
-                            </div>
+                                          },
+                                        });
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newFilters = (
+                                        config.config.feature.network.incoming
+                                          .httpFilter ?? []
+                                      ).filter(
+                                        (f, i) =>
+                                          !(f.type === "path" && i === index)
+                                      );
+                                      setConfig({
+                                        ...config,
+                                        network: {
+                                          ...config.config.feature.network,
+                                          incoming: {
+                                            ...config.config.feature.network
+                                              .incoming,
+                                            httpFilter: newFilters,
+                                          },
+                                        },
+                                      });
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
                           </div>
                         )}
                       </div>
+
+                      {/* Filter Logic Selection - Only show when there are multiple filters */}
+                      {(config.config.feature.network.incoming.httpFilter ?? [])
+                        .length > 1 && (
+                        <>
+                          <Separator />
+                          <div className="space-y-2">
+                            <Label className="font-medium">Filter Logic</Label>
+                            <RadioGroup
+                              value={
+                                config.config.feature.network.incoming
+                                  .filterOperator
+                              }
+                              onValueChange={(value: "AND" | "OR") =>
+                                setConfig({
+                                  ...config,
+                                  network: {
+                                    ...config.config.feature.network,
+                                    incoming: {
+                                      ...config.config.feature.network.incoming,
+                                      filterOperator: value,
+                                    },
+                                  },
+                                })
+                              }
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="AND" id="and" />
+                                <Label htmlFor="and" className="text-sm">
+                                  <strong>All</strong> - Match all specified
+                                  filters
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="OR" id="or" />
+                                <Label htmlFor="or" className="text-sm">
+                                  <strong>Any</strong> - Match any specified
+                                  filter
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {(selectedBoilerplate === "mirror" ||
-                  selectedBoilerplate === "replace") && (
-                  <div className="space-y-4">
-                    {/* Simplified Port Configuration */}
+                  {/* Simplified Port Configuration */}
+                  <div className="space-y-4 mt-6">
                     <div>
                       <h3 className="text-base font-semibold mb-1">
                         Port Configuration
                       </h3>
                       <p className="text-xs text-muted-foreground mb-3">
-                        Click ports to select them for mirroring
+                        Click a port to enable HTTP filtering. Deselect any
+                        ports that are not HTTP or gRPC. The following ports
+                        were detected in your target, with some already
+                        preselected by default.
                       </p>
                     </div>
 
                     <div className="space-y-4">
                       {/* Detected Ports */}
                       <div>
-                        <h4 className="text-base font-semibold">
-                          Detected Ports
-                        </h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          Click on a port to create a mapping.
-                        </p>
                         <div className="flex flex-wrap gap-2">
                           {[
                             "8080",
@@ -800,23 +671,22 @@ const ConfigTabs = () => {
                             "5672",
                             "3306",
                           ].map((port) => {
-                            const isSelected =
-                              config.network.incoming.ports.some(
-                                (p) => p.remote === port
-                              );
+                            const isSelected = (
+                              config.config.feature.network.incoming.ports ?? []
+                            ).some((p) => p.remote === port);
                             const togglePort = () => {
                               if (isSelected) {
                                 // Remove port
-                                const newPorts =
-                                  config.network.incoming.ports.filter(
-                                    (p) => p.remote !== port
-                                  );
+                                const newPorts = (
+                                  config.config.feature.network.incoming
+                                    .ports ?? []
+                                ).filter((p) => p.remote !== port);
                                 setConfig({
                                   ...config,
                                   network: {
-                                    ...config.network,
+                                    ...config.config.feature.network,
                                     incoming: {
-                                      ...config.network.incoming,
+                                      ...config.config.feature.network.incoming,
                                       ports: newPorts,
                                     },
                                   },
@@ -826,11 +696,12 @@ const ConfigTabs = () => {
                                 setConfig({
                                   ...config,
                                   network: {
-                                    ...config.network,
+                                    ...config.config.feature.network,
                                     incoming: {
-                                      ...config.network.incoming,
+                                      ...config.config.feature.network.incoming,
                                       ports: [
-                                        ...config.network.incoming.ports,
+                                        ...config.config.feature.network
+                                          .incoming.ports,
                                         {
                                           remote: port,
                                           local: port,
@@ -861,92 +732,131 @@ const ConfigTabs = () => {
                       </div>
 
                       {/* Port Mappings */}
-                      {config.network.incoming.ports.length > 0 && (
+                      {(config.config.feature.network.incoming.ports ?? [])
+                        .length > 0 && (
                         <div className="space-y-3">
                           <h4 className="text-base font-semibold">
-                            Port Mappings
+                            Selected Ports
                           </h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Only map ports that run on different ports locally.
+                          </p>
                           <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-4 text-sm font-medium text-muted-foreground">
-                              <div>Local Port</div>
-                              <div>Remote Port</div>
-                            </div>
-                            {config.network.incoming.ports.map(
-                              (portConfig, index) => (
-                                <div
-                                  key={portConfig.remote}
-                                  className="flex items-center gap-3"
-                                >
-                                  <div className="flex-1">
-                                    <Input
+                            {(
+                              config.config.feature.network.incoming.ports ?? []
+                            ).map((portConfig, index) => (
+                              <div
+                                key={portConfig.remote}
+                                className="border rounded-lg p-4 space-y-3"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      variant="outline"
                                       className="font-mono"
-                                      placeholder={portConfig.remote}
-                                      value={portConfig.local}
-                                      onChange={(e) => {
-                                        const newPorts = [
-                                          ...config.network.incoming.ports,
-                                        ];
-                                        newPorts[index] = {
-                                          ...newPorts[index],
-                                          local:
-                                            e.target.value || portConfig.remote,
-                                        };
-                                        setConfig({
-                                          ...config,
-                                          network: {
-                                            ...config.network,
-                                            incoming: {
-                                              ...config.network.incoming,
-                                              ports: newPorts,
-                                            },
-                                          },
-                                        });
-                                      }}
-                                    />
+                                    >
+                                      {portConfig.remote}
+                                    </Badge>
+                                    <span className="text-sm text-muted-foreground">
+                                      Remote Port
+                                    </span>
                                   </div>
+                                </div>
 
-                                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-
-                                  <div className="flex-1">
-                                    <Input
-                                      className="font-mono"
-                                      value={portConfig.remote}
-                                      readOnly
-                                    />
-                                  </div>
-
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                    onClick={() => {
-                                      const newPorts =
-                                        config.network.incoming.ports.filter(
-                                          (p) => p.remote !== portConfig.remote
-                                        );
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`local-port-${portConfig.remote}`}
+                                    checked={
+                                      portConfig.local !== portConfig.remote
+                                    }
+                                    onCheckedChange={(checked) => {
+                                      const newPorts = [
+                                        ...config.config.feature.network
+                                          .incoming.ports,
+                                      ];
+                                      newPorts[index] = {
+                                        ...newPorts[index],
+                                        local: checked ? "" : portConfig.remote,
+                                      };
                                       setConfig({
                                         ...config,
                                         network: {
-                                          ...config.network,
+                                          ...config.config.feature.network,
                                           incoming: {
-                                            ...config.network.incoming,
+                                            ...config.config.feature.network
+                                              .incoming,
                                             ports: newPorts,
                                           },
                                         },
                                       });
                                     }}
+                                  />
+                                  <Label
+                                    htmlFor={`local-port-${portConfig.remote}`}
+                                    className="text-sm"
                                   >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                    Local port is different than remote
+                                  </Label>
                                 </div>
-                              )
-                            )}
+
+                                {portConfig.local !== portConfig.remote && (
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-1">
+                                      <Label className="text-xs text-muted-foreground">
+                                        Local Port
+                                      </Label>
+                                      <Input
+                                        className="font-mono"
+                                        placeholder={portConfig.remote}
+                                        value={portConfig.local}
+                                        onChange={(e) => {
+                                          const newPorts = [
+                                            ...config.config.feature.network
+                                              .incoming.ports,
+                                          ];
+                                          newPorts[index] = {
+                                            ...newPorts[index],
+                                            local:
+                                              e.target.value ||
+                                              portConfig.remote,
+                                          };
+                                          setConfig({
+                                            ...config,
+                                            network: {
+                                              ...config.config.feature.network,
+                                              incoming: {
+                                                ...config.config.feature.network
+                                                  .incoming,
+                                                ports: newPorts,
+                                              },
+                                            },
+                                          });
+                                        }}
+                                      />
+                                    </div>
+
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-4" />
+
+                                    <div className="flex-1">
+                                      <Label className="text-xs text-muted-foreground">
+                                        Remote Port
+                                      </Label>
+                                      <Input
+                                        className="font-mono"
+                                        value={portConfig.remote}
+                                        readOnly
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -970,7 +880,8 @@ const ConfigTabs = () => {
                   <Textarea
                     id="json-editor"
                     className="font-mono text-sm min-h-[200px] max-h-[200px] resize-none"
-                    value={editableJson || generateConfigJson(config)}
+                    // value={editableJson || generateConfigJson(config)}
+                    value=""
                     onChange={(e) => {
                       setEditableJson(e.target.value);
                       validateJson(e.target.value, setJsonError);
@@ -998,15 +909,16 @@ const ConfigTabs = () => {
                 </Button>
 
                 <DownloadButton
-                  json={editableJson || generateConfigJson(config)}
-                  filename={"mirrord-config"}
+                  // json={editableJson || generateConfigJson(config)}
+                  json="string" // TODO: config.config.toString()
+                  filename={"mirrord-config"} // TODO: use config name
                 />
 
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setEditableJson(generateConfigJson(config));
+                    setEditableJson(config.config);
                     setJsonError("");
                   }}
                 >
@@ -1055,4 +967,4 @@ const ConfigTabs = () => {
   );
 };
 
-export default ConfigTabs
+export default ConfigTabs;
