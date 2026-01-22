@@ -116,6 +116,8 @@ impl ExecuteArgs {
         // ignore intellij debugger https://github.com/metalbear-co/mirrord/issues/2408
         // don't put it in build tools since we don't want to SIP load on macOS. (leads to above
         // issue)
+        // also, ignore the Gradle daemon (COR-1173)
+        // we can't skip it with build tools because the process name is just 'java'
         if self
             .exec_name
             .as_str()
@@ -124,6 +126,14 @@ impl ExecuteArgs {
                 .invoked_as
                 .as_str()
                 .ends_with("JetBrains.Debugger.Worker")
+            || self
+                .exec_name
+                .as_str()
+                .ends_with("org.gradle.launcher.daemon.bootstrap.GradleDaemon")
+            || self
+                .invoked_as
+                .as_str()
+                .ends_with("org.gradle.launcher.daemon.bootstrap.GradleDaemon")
         {
             return false;
         }

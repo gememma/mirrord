@@ -1,0 +1,1 @@
+When the current process is the Gradle Daemon, mirrord no longer loads into it.
